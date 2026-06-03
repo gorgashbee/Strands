@@ -1,0 +1,936 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Custom Strands Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Completely lock down viewport bounce and scrolling on mobile devices */
+        html, body {
+            overscroll-behavior-y: none;
+            overscroll-behavior-x: none;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            height: 100%;
+        }
+    </style>
+</head>
+<body class="bg-stone-100 text-stone-900 font-sans min-h-screen flex flex-col items-center p-3 pb-36 touch-none select-none">
+
+    <!-- Header Navigation -->
+    <header class="w-full max-w-sm text-center py-1.5 border-b border-stone-200">
+        <h1 class="text-2xl font-extrabold tracking-tight font-serif">Strands Studio</h1>
+        
+        <!-- Mode Tabs -->
+        <div class="flex justify-center gap-3 mt-1.5">
+            <button id="nav-play-btn" onclick="switchMode('play')" class="px-4 py-1 bg-stone-200 text-stone-800 text-[11px] font-bold rounded-full hover:bg-stone-300 transition-all">
+                Play Game
+            </button>
+            <button id="nav-create-btn" onclick="switchMode('create')" class="px-4 py-1 bg-stone-900 text-white text-[11px] font-bold rounded-full shadow-md transition-all">
+                🎨 Artist Studio
+            </button>
+        </div>
+    </header>
+
+    <!-- ========================================== -->
+    <!-- PLAY VIEW                                  -->
+    <!-- ========================================== -->
+    <main id="play-view" class="w-full max-w-sm flex-1 flex flex-col justify-start my-2 gap-2 hidden">
+        
+        <!-- Active Clue Card -->
+        <div class="bg-white p-2 rounded-xl shadow-xs border border-stone-200 text-center">
+            <div class="text-[9px] font-black uppercase tracking-widest text-stone-400">Today's Clue</div>
+            <p id="game-clue" class="text-base font-extrabold italic text-stone-800">No Puzzle Loaded</p>
+        </div>
+
+        <div class="flex justify-between items-center px-1 text-[11px] font-bold text-stone-500">
+            <div>Theme Words Found: <span id="words-found-count" class="text-stone-900 font-extrabold">0</span>/<span id="total-words-count">0</span></div>
+            <div id="spangram-status" class="text-amber-600 font-black tracking-wider uppercase bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 hidden">
+                ⚡ Spangram Found!
+            </div>
+        </div>
+
+        <!-- Word Selection HUD -->
+        <div class="h-8 flex flex-col items-center justify-center">
+            <div id="current-word-display" class="px-4 py-1 bg-stone-800 text-white rounded-full text-xs font-black tracking-widest uppercase shadow-md opacity-0 transition-opacity flex items-center gap-2">
+                <span>...</span>
+            </div>
+            <div id="tap-instruction" class="text-[9px] text-stone-400 font-bold mt-0.5 opacity-0">Double-tap last letter to submit!</div>
+        </div>
+
+        <!-- 6x8 Interactive Board -->
+        <div id="strands-grid" class="grid gap-1 w-full aspect-[6/8] max-h-[38vh] bg-stone-300 p-1.5 rounded-xl shadow-inner relative touch-none" style="grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 1fr);">
+            <!-- Letters injected dynamically on load -->
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center justify-center gap-3 mt-1">
+            <button id="hint-btn" onclick="giveHint()" class="px-4 py-1.5 border border-stone-400 bg-white rounded-full text-[11px] font-bold hover:bg-stone-50 transition-colors shadow-xs">
+                💡 Get Hint
+            </button>
+            <button onclick="resetPlayerGame()" class="px-4 py-1.5 border border-stone-400 bg-white rounded-full text-[11px] font-bold text-red-700 hover:bg-red-50 transition-colors shadow-xs">
+                Reset Board
+            </button>
+        </div>
+    </main>
+
+    <!-- ========================================== -->
+    <!-- CREATOR VIEW (ARTIST STUDIO)               -->
+    <!-- ========================================== -->
+    <main id="creator-view" class="w-full max-w-sm flex-1 flex flex-col justify-start my-2 gap-3 overflow-y-auto max-h-[75vh]">
+        <div class="bg-white p-3 rounded-xl shadow-md border border-stone-200 space-y-3">
+            <div>
+                <h2 class="text-lg font-serif font-bold text-stone-800">Strands Creator</h2>
+                <p class="text-[11px] text-stone-500">Design a custom puzzle. Up to 7 theme words + 1 Spangram. Total must equal exactly 48 letters!</p>
+            </div>
+
+            <!-- Parameters Setup -->
+            <div class="space-y-2">
+                <div>
+                    <label class="text-[9px] font-black uppercase tracking-wider text-stone-500">1. Clue / Theme Description</label>
+                    <input type="text" id="create-clue" placeholder="e.g., Happily Ever After" class="w-full mt-0.5 p-1.5 bg-stone-50 text-xs font-bold border border-stone-200 rounded-lg focus:ring-2 focus:ring-stone-400 outline-none">
+                </div>
+
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[9px] font-black uppercase tracking-wider text-stone-500">2. Define Your Word List</label>
+                        <span id="letter-counter" class="text-[11px] font-bold text-amber-600">
+                            Total Letters: 0 / 48
+                        </span>
+                    </div>
+
+                    <!-- Row 1: Spangram & Word 1 -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-amber-600 block">Spangram</label>
+                            <input type="text" id="create-spangram" placeholder="FAIRYTALE" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-amber-50 text-amber-900 text-[11px] font-black border border-amber-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Theme Word 1</label>
+                            <input type="text" id="create-word-0" placeholder="CASTLE" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Words 2, 3, 4 -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 2</label>
+                            <input type="text" id="create-word-1" placeholder="PRINCE" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 3</label>
+                            <input type="text" id="create-word-2" placeholder="WITCH" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 4</label>
+                            <input type="text" id="create-word-3" placeholder="DRAGON" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                    </div>
+
+                    <!-- Row 3: Words 5, 6, 7 (Optional Expansion Row) -->
+                    <div id="extra-words-row" class="grid grid-cols-3 gap-2 hidden">
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 5</label>
+                            <input type="text" id="create-word-4" placeholder="MAGIC" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 6</label>
+                            <input type="text" id="create-word-5" placeholder="BOOK" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                        <div>
+                            <label class="text-[8px] font-black uppercase tracking-wider text-blue-600 block">Word 7</label>
+                            <input type="text" id="create-word-6" placeholder="ONCE" oninput="onWordInputsChanged()" class="w-full p-1.5 bg-blue-50 text-blue-900 text-[11px] font-bold border border-blue-200 rounded-md outline-none uppercase tracking-wider">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visual Tap-To-Paint Board -->
+            <div class="border-t border-stone-100 pt-2">
+                <div class="flex items-center justify-between mb-1.5">
+                    <label class="text-[9px] font-black uppercase tracking-wider text-stone-500">3. Tap Cells To Paint Words</label>
+                    <button onclick="clearBuilderGrid()" class="text-[9px] text-red-500 font-extrabold hover:underline">Reset Paint Canvas</button>
+                </div>
+                
+                <!-- Word Pill Selector -->
+                <div class="flex flex-wrap gap-1 mb-2" id="creator-words-pillbox">
+                    <!-- Responsive pills load here -->
+                </div>
+
+                <div class="text-[9px] text-stone-500 mb-1.5 font-semibold italic text-center" id="creator-instruction-hud">
+                    Type your words above to start painting them!
+                </div>
+
+                <!-- 6x8 Studio Canvas -->
+                <div id="creator-grid" class="grid gap-1 w-full aspect-[6/8] max-h-[38vh] bg-stone-200 p-1.5 rounded-xl border border-stone-300" style="grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 1fr);">
+                    <!-- 48 design tiles load here -->
+                </div>
+            </div>
+
+            <!-- Action Panel -->
+            <div class="flex flex-col gap-2 pt-1">
+                <button id="creator-submit-btn" onclick="commitCustomPuzzle()" class="w-full py-2.5 bg-stone-200 text-stone-400 font-bold rounded-lg text-xs uppercase tracking-wider transition-all cursor-not-allowed" disabled>
+                    Paint all 48 letters to play
+                </button>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="copyShareLink()" class="py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-lg shadow-xs">
+                        🔗 Share Link
+                    </button>
+                    <button onclick="autofillCreatorDemo()" class="py-2 bg-stone-200 text-stone-800 text-[10px] font-bold rounded-lg">
+                        🪄 Autofill Demo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Toast Alerts -->
+    <div id="toast" class="fixed top-24 left-1/2 -translate-x-1/2 bg-stone-900 text-stone-100 px-4 py-2 rounded-lg shadow-lg text-xs font-bold tracking-wide opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Excellent!
+    </div>
+
+    <!-- Win Modal -->
+    <div id="win-modal" class="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl max-w-xs w-full p-6 text-center shadow-2xl border border-stone-100">
+            <div class="text-5xl mb-3">🏆</div>
+            <h2 class="text-2xl font-bold font-serif mb-1 text-stone-900">Strands Complete!</h2>
+            <p class="text-stone-500 text-xs mb-5">Awesome job! You solved every single theme pathway on the board.</p>
+            <button onclick="resetPlayerGame()" class="w-full py-2.5 bg-stone-950 text-white rounded-full text-sm font-semibold hover:bg-stone-800 transition-colors cursor-pointer">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ========================================================
+        // CORE ACTIVE PUZZLE DATA STRUCTURE (Demo Autofill reference)
+        // ========================================================
+        const FAIRYTALE_PUZZLE = {
+            clue: "Happily Ever After",
+            spangram: "FAIRYTALE",
+            themeWords: ["CASTLE", "PRINCE", "WITCH", "DRAGON", "MAGIC", "BOOK", "ONCE"],
+            gridMatrix: [
+                ['C', 'A', 'S', 'T', 'L', 'E'],
+                ['P', 'R', 'I', 'N', 'C', 'E'],
+                ['F', 'A', 'I', 'R', 'Y', 'T'],
+                ['A', 'L', 'E', 'W', 'I', 'T'],
+                ['C', 'H', 'D', 'R', 'A', 'G'],
+                ['O', 'N', 'B', 'O', 'O', 'K'],
+                ['M', 'A', 'G', 'I', 'C', 'Q'],
+                ['U', 'P', 'O', 'N', 'C', 'E']
+            ],
+            wordPaths: {
+                "CASTLE": [[0,0],[0,1],[0,2],[0,3],[0,4],[0,5]],
+                "PRINCE": [[1,0],[1,1],[1,2],[1,3],[1,4],[1,5]],
+                "FAIRYTALE": [[2,0],[2,1],[2,2],[2,3],[2,4],[2,5],[3,2],[3,1],[3,0]],
+                "WITCH": [[3,3],[3,4],[3,5],[4,5],[4,4]],
+                "DRAGON": [[4,3],[4,2],[5,0],[5,1],[4,1],[4,0]],
+                "MAGIC": [[6,2],[6,1],[6,0],[7,0],[7,1]],
+                "BOOK": [[5,2],[5,3],[5,4],[5,5]],
+                "ONCE": [[7,2],[7,3],[7,4],[7,5]]
+            }
+        };
+
+        // Master Game State
+        let PUZZLE_DATA = null;
+        let foundWords = [];
+        let selectedIndices = [];
+        let isDragging = false;
+
+        // Custom Studio State
+        let currentSelectedWordToPaint = "";
+        let builderPaths = {};  // e.g. { "CASTLE": [[r,c], [r,c]...] }
+        let builderLetters = Array(8).fill(null).map(() => Array(6).fill(''));
+
+        // Elements cache
+        const playView = document.getElementById('play-view');
+        const creatorView = document.getElementById('creator-view');
+        const gridElement = document.getElementById('strands-grid');
+        const currentWordDisplay = document.getElementById('current-word-display');
+        const toastElement = document.getElementById('toast');
+
+        function switchMode(mode) {
+            if (mode === 'play') {
+                if (!PUZZLE_DATA) {
+                    showToast("No active puzzle committed yet! Paint one in the Studio first.");
+                    return;
+                }
+                playView.classList.remove('hidden');
+                creatorView.classList.add('hidden');
+                document.getElementById('nav-play-btn').className = "px-4 py-1 bg-stone-900 text-white text-[11px] font-bold rounded-full shadow-md transition-all";
+                document.getElementById('nav-create-btn').className = "px-4 py-1 bg-stone-200 text-stone-800 text-[11px] font-bold rounded-full hover:bg-stone-300 transition-all";
+                initPlayerGame();
+            } else {
+                playView.classList.add('hidden');
+                creatorView.classList.remove('hidden');
+                document.getElementById('nav-play-btn').className = "px-4 py-1 bg-stone-200 text-stone-800 text-[11px] font-bold rounded-full hover:bg-stone-300 transition-all";
+                document.getElementById('nav-create-btn').className = "px-4 py-1 bg-stone-900 text-white text-[11px] font-bold rounded-full shadow-md transition-all";
+                initCreatorStudio();
+            }
+        }
+
+        // ==========================================
+        // 🎮 PLAYER LOGIC (Taps, Swipes, Double-Tap)
+        // ==========================================
+        function initPlayerGame() {
+            if (!PUZZLE_DATA) return;
+            foundWords = [];
+            selectedIndices = [];
+            isDragging = false;
+            document.getElementById('win-modal').classList.add('hidden');
+            document.getElementById('spangram-status').classList.add('hidden');
+            
+            document.getElementById('game-clue').textContent = `"${PUZZLE_DATA.clue}"`;
+            document.getElementById('total-words-count').textContent = PUZZLE_DATA.themeWords.length + 1;
+            document.getElementById('words-found-count').textContent = "0";
+
+            renderPlayerGrid();
+        }
+
+        function renderPlayerGrid() {
+            gridElement.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    const tile = document.createElement('div');
+                    tile.dataset.row = r;
+                    tile.dataset.col = c;
+                    tile.id = `tile-${r}-${c}`;
+                    
+                    // Interaction Hooks (supports mouse and swipe drag)
+                    tile.addEventListener('mousedown', () => onPlayerInteractionStart(r, c));
+                    tile.addEventListener('mouseenter', () => onPlayerInteractionExtend(r, c));
+                    tile.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        onPlayerInteractionStart(r, c);
+                    });
+
+                    gridElement.appendChild(tile);
+                }
+            }
+
+            // Sync visual states instantly
+            updateBoardVisuals();
+
+            // Global release bindings
+            window.addEventListener('mouseup', onPlayerInteractionEnd);
+            gridElement.addEventListener('touchmove', handlePlayerTouchMove);
+            window.addEventListener('touchend', onPlayerInteractionEnd);
+        }
+
+        // Standardized visual sync function completely prevents desync/disappearing text
+        function updateBoardVisuals() {
+            if (!PUZZLE_DATA) return;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    const tile = document.getElementById(`tile-${r}-${c}`);
+                    if (!tile) continue;
+
+                    const letter = PUZZLE_DATA.gridMatrix[r][c] || '';
+                    tile.textContent = letter;
+
+                    const strKey = `${r}-${c}`;
+                    const selectIndex = selectedIndices.indexOf(strKey);
+
+                    // Check if solved as Spangram or Theme word
+                    let isSolvedSpangram = false;
+                    let isSolvedTheme = false;
+                    
+                    Object.keys(PUZZLE_DATA.wordPaths).forEach(word => {
+                        if (foundWords.includes(word)) {
+                            const inPath = PUZZLE_DATA.wordPaths[word].some(([pr, pc]) => pr === r && pc === c);
+                            if (inPath) {
+                                if (word === PUZZLE_DATA.spangram) isSolvedSpangram = true;
+                                else isSolvedTheme = true;
+                            }
+                        }
+                    });
+
+                    // Base classes: Use w-full h-full to respect parent grid constraints
+                    let baseClasses = "w-full h-full flex items-center justify-center font-black text-sm sm:text-lg md:text-xl rounded-lg shadow-xs select-none uppercase border transition-all ";
+
+                    // Set precise styling classes based on priority
+                    if (isSolvedSpangram) {
+                        tile.className = baseClasses + "border-yellow-400 bg-yellow-200 text-yellow-900";
+                    } else if (isSolvedTheme) {
+                        tile.className = baseClasses + "border-blue-400 bg-blue-200 text-blue-900";
+                    } else if (selectIndex !== -1) {
+                        const isTip = selectIndex === selectedIndices.length - 1;
+                        if (isTip) {
+                            tile.className = baseClasses + "scale-105 border-stone-800 bg-stone-800 text-white shadow-md";
+                        } else {
+                            tile.className = baseClasses + "border-stone-400 bg-stone-300 text-stone-900";
+                        }
+                    } else {
+                        tile.className = baseClasses + "bg-white border-stone-300/60 text-stone-900 hover:bg-stone-50";
+                    }
+                }
+            }
+        }
+
+        function handlePlayerTouchMove(e) {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+            const element = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (!element || !element.dataset.row) return;
+            onPlayerInteractionExtend(parseInt(element.dataset.row), parseInt(element.dataset.col));
+        }
+
+        function onPlayerInteractionStart(r, c) {
+            if (isTileInFoundWord(r, c)) return;
+            const strKey = `${r}-${c}`;
+
+            // Double Tap Submission logic
+            if (selectedIndices.length > 0) {
+                const lastIdxStr = selectedIndices[selectedIndices.length - 1];
+                if (lastIdxStr === strKey) {
+                    submitGuess();
+                    return;
+                }
+            }
+
+            isDragging = true;
+            if (!selectedIndices.includes(strKey)) {
+                const [lastR, lastC] = (selectedIndices.length > 0 ? selectedIndices[selectedIndices.length-1].split('-').map(Number) : [-2, -2]);
+                if (Math.abs(r - lastR) > 1 || Math.abs(c - lastC) > 1) {
+                    selectedIndices = [strKey];
+                } else {
+                    selectedIndices.push(strKey);
+                }
+            }
+            highlightPlayerHUD();
+            updateBoardVisuals();
+        }
+
+        function onPlayerInteractionExtend(r, c) {
+            if (!isDragging) return;
+            if (isTileInFoundWord(r, c)) return;
+            
+            const lastIndexStr = selectedIndices[selectedIndices.length - 1];
+            const [lastR, lastC] = lastIndexStr.split('-').map(Number);
+            
+            const rowDiff = Math.abs(r - lastR);
+            const colDiff = Math.abs(c - lastC);
+            
+            if (rowDiff <= 1 && colDiff <= 1) {
+                const currentStr = `${r}-${c}`;
+                const existingPos = selectedIndices.indexOf(currentStr);
+                
+                if (existingPos === -1) {
+                    selectedIndices.push(currentStr);
+                } else if (existingPos === selectedIndices.length - 2) {
+                    selectedIndices.pop();
+                }
+                highlightPlayerHUD();
+                updateBoardVisuals();
+            }
+        }
+
+        function onPlayerInteractionEnd() {
+            isDragging = false;
+        }
+
+        function submitGuess() {
+            const word = selectedIndices.map(key => {
+                const [r, c] = key.split('-').map(Number);
+                return PUZZLE_DATA.gridMatrix[r][c];
+            }).join('');
+
+            if (word.length < 3) return;
+
+            if (PUZZLE_DATA.themeWords.includes(word) && !foundWords.includes(word)) {
+                commitFoundWord(word, false);
+            } else if (word === PUZZLE_DATA.spangram && !foundWords.includes(word)) {
+                commitFoundWord(word, true);
+            } else {
+                showToast("Sorry, that's not a theme word.");
+            }
+
+            selectedIndices = [];
+            currentWordDisplay.classList.add('opacity-0');
+            document.getElementById('tap-instruction').classList.add('opacity-0');
+            updateBoardVisuals();
+        }
+
+        function commitFoundWord(word, isSpangram) {
+            foundWords.push(word);
+            showToast(isSpangram ? "💥 SPANGRAM FOUND!" : "Splendid!");
+
+            if (isSpangram) {
+                document.getElementById('spangram-status').classList.remove('hidden');
+            }
+
+            document.getElementById('words-found-count').textContent = foundWords.length;
+
+            if (foundWords.length === (PUZZLE_DATA.themeWords.length + 1)) {
+                setTimeout(() => {
+                    document.getElementById('win-modal').classList.remove('hidden');
+                }, 800);
+            }
+        }
+
+        function highlightPlayerHUD() {
+            if (selectedIndices.length === 0) return;
+
+            currentWordDisplay.classList.remove('opacity-0');
+            document.getElementById('tap-instruction').classList.remove('opacity-0');
+            
+            const word = selectedIndices.map(key => {
+                const [r, c] = key.split('-').map(Number);
+                return PUZZLE_DATA.gridMatrix[r][c];
+            }).join('');
+            currentWordDisplay.textContent = word;
+        }
+
+        function isTileInFoundWord(r, c) {
+            if (!PUZZLE_DATA) return false;
+            return Object.keys(PUZZLE_DATA.wordPaths).some(word => {
+                if (!foundWords.includes(word)) return false;
+                return PUZZLE_DATA.wordPaths[word].some(([pr, pc]) => pr === r && pc === c);
+            });
+        }
+
+        function giveHint() {
+            if (!PUZZLE_DATA) return;
+            const missingWord = [...PUZZLE_DATA.themeWords, PUZZLE_DATA.spangram].find(w => !foundWords.includes(w));
+            if (!missingWord) return;
+
+            const firstLetterCoord = PUZZLE_DATA.wordPaths[missingWord][0];
+            const tile = document.getElementById(`tile-${firstLetterCoord[0]}-${firstLetterCoord[1]}`);
+            if (tile) {
+                tile.classList.add('animate-bounce', 'border-2', 'border-amber-500');
+                showToast("Hint: Look at the bouncing tile!");
+                setTimeout(() => { tile.classList.remove('animate-bounce'); }, 3000);
+            }
+        }
+
+        function resetPlayerGame() {
+            initPlayerGame();
+        }
+
+        function usePresetPuzzle() {
+            PUZZLE_DATA = JSON.parse(JSON.stringify(FAIRYTALE_PUZZLE));
+            initPlayerGame();
+            showToast("Fairytale puzzle loaded!");
+        }
+
+        // ==========================================
+        // 🎨 ARTIST CREATOR STUDIO LOGIC
+        // ==========================================
+        function initCreatorStudio() {
+            onWordInputsChanged();
+            renderBuilderGrid();
+        }
+
+        function getCreatorWordList() {
+            const spangram = document.getElementById('create-spangram').value.trim().toUpperCase();
+            const themes = [];
+            
+            // Support up to 7 theme words
+            for (let i = 0; i < 7; i++) {
+                const el = document.getElementById(`create-word-${i}`);
+                if (el) {
+                    const val = el.value.trim().toUpperCase();
+                    if (val) themes.push(val);
+                }
+            }
+            return { spangram, themes };
+        }
+
+        function onWordInputsChanged() {
+            const { spangram, themes } = getCreatorWordList();
+            
+            let sum = spangram.length;
+            themes.forEach(w => sum += w.length);
+
+            const counterEl = document.getElementById('letter-counter');
+            counterEl.textContent = `Total Letters: ${sum} / 48`;
+
+            if (sum === 48) {
+                counterEl.className = "text-xs font-black text-green-600";
+                document.getElementById('extra-words-row').classList.remove('hidden');
+            } else if (sum > 48) {
+                counterEl.className = "text-xs font-black text-red-600 animate-pulse";
+                document.getElementById('extra-words-row').classList.remove('hidden');
+            } else {
+                counterEl.className = "text-xs font-bold text-amber-600";
+                // Reveal optional row with words 5, 6, 7 as letter list increases
+                if (sum > 20) {
+                    document.getElementById('extra-words-row').classList.remove('hidden');
+                } else {
+                    document.getElementById('extra-words-row').classList.add('hidden');
+                }
+            }
+
+            updateCreatorPills(spangram, themes);
+            validateFullBoardComplete();
+        }
+
+        function updateCreatorPills(spangram, themes) {
+            const pillbox = document.getElementById('creator-words-pillbox');
+            pillbox.innerHTML = '';
+
+            if (spangram) {
+                const isPlacing = currentSelectedWordToPaint === spangram;
+                const isCommitted = builderPaths[spangram] !== undefined;
+
+                const pill = document.createElement('button');
+                pill.className = `px-3 py-1.5 text-xs font-black rounded-full uppercase border transition-all ${
+                    isPlacing ? 'bg-amber-400 text-stone-900 border-amber-500 ring-2 ring-amber-300 scale-105 shadow-sm' :
+                    isCommitted ? 'bg-amber-100 text-amber-800 border-amber-300 opacity-60' :
+                    'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                }`;
+                pill.innerHTML = `⭐ ${spangram} ${isCommitted ? '✓' : ''}`;
+                pill.onclick = () => selectWordToPaint(spangram);
+                pillbox.appendChild(pill);
+            }
+
+            themes.forEach(word => {
+                const isPlacing = currentSelectedWordToPaint === word;
+                const isCommitted = builderPaths[word] !== undefined;
+
+                const pill = document.createElement('button');
+                pill.className = `px-3 py-1.5 text-xs font-bold rounded-full uppercase border transition-all ${
+                    isPlacing ? 'bg-blue-400 text-white border-blue-500 ring-2 ring-blue-300 scale-105 shadow-sm' :
+                    isCommitted ? 'bg-blue-100 text-blue-800 border-blue-300 opacity-60' :
+                    'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                }`;
+                pill.innerHTML = `${word} ${isCommitted ? '✓' : ''}`;
+                pill.onclick = () => selectWordToPaint(word);
+                pillbox.appendChild(pill);
+            });
+
+            updateInstructionHUD();
+        }
+
+        function selectWordToPaint(word) {
+            if (builderPaths[word]) {
+                delete builderPaths[word];
+                wipeWordLettersFromMatrix(word);
+            }
+
+            currentSelectedWordToPaint = word;
+            onWordInputsChanged();
+            renderBuilderGrid();
+        }
+
+        function wipeWordLettersFromMatrix(word) {
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    if (builderLetters[r][c] === word) {
+                        builderLetters[r][c] = '';
+                    }
+                }
+            }
+        }
+
+        function updateInstructionHUD() {
+            const hud = document.getElementById('creator-instruction-hud');
+            if (!currentSelectedWordToPaint) {
+                hud.textContent = "Tap on any word pill above to start painting it!";
+                hud.className = "text-[10px] text-stone-500 font-semibold italic text-center";
+            } else {
+                const path = builderPaths[currentSelectedWordToPaint] || [];
+                const placedLength = path.length;
+                const remaining = currentSelectedWordToPaint.length - placedLength;
+
+                if (remaining > 0) {
+                    hud.textContent = `Painting: "${currentSelectedWordToPaint}". Tap a cell to place Letter "${currentSelectedWordToPaint[placedLength]}" (${remaining} remaining)`;
+                    hud.className = "text-[10px] text-blue-600 font-black tracking-wide text-center uppercase";
+                } else {
+                    hud.textContent = `"${currentSelectedWordToPaint}" fully painted! Select another word pill above.`;
+                    hud.className = "text-[10px] text-green-600 font-black tracking-wide text-center uppercase";
+                }
+            }
+        }
+
+        function renderBuilderGrid() {
+            const container = document.getElementById('creator-grid');
+            container.innerHTML = '';
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    const tile = document.createElement('button');
+                    tile.dataset.row = r;
+                    tile.dataset.col = c;
+                    tile.id = `build-${r}-${c}`;
+                    
+                    // Standard height-scaling layout rules apply here to map perfectly
+                    let baseClasses = "w-full h-full flex items-center justify-center font-bold text-xs sm:text-sm rounded-lg transition-all uppercase select-none border ";
+
+                    let tileStatus = "empty";
+                    let letterToDisplay = "";
+                    let belongsToWord = "";
+
+                    const currentPath = builderPaths[currentSelectedWordToPaint] || [];
+                    const activeIndex = currentPath.findIndex(([pr, pc]) => pr === r && pc === c);
+
+                    if (activeIndex !== -1) {
+                        tileStatus = "placing";
+                        letterToDisplay = currentSelectedWordToPaint[activeIndex];
+                    } else {
+                        Object.keys(builderPaths).forEach(word => {
+                            const path = builderPaths[word] || [];
+                            const idx = path.findIndex(([pr, pc]) => pr === r && pc === c);
+                            if (idx !== -1) {
+                                tileStatus = "committed";
+                                letterToDisplay = word[idx];
+                                belongsToWord = word;
+                            }
+                        });
+                    }
+
+                    // Apply precise styling combinations
+                    if (tileStatus === "empty") {
+                        tile.className = baseClasses + "bg-stone-50 text-stone-400 border-dashed border-stone-300 hover:bg-stone-200 hover:border-stone-400";
+                        tile.textContent = "";
+                        if (currentSelectedWordToPaint) {
+                            tile.onclick = () => onCreatorCellTapped(r, c);
+                        }
+                    } else if (tileStatus === "placing") {
+                        tile.className = baseClasses + "bg-blue-100 text-blue-700 border-blue-400";
+                        tile.textContent = letterToDisplay;
+                        if (activeIndex === currentPath.length - 1) {
+                            tile.onclick = () => backtrackPaintPath();
+                        }
+                    } else if (tileStatus === "committed") {
+                        tile.className = baseClasses + "bg-green-100 text-green-700 border-green-400";
+                        tile.textContent = letterToDisplay;
+                        tile.onclick = () => selectWordToPaint(belongsToWord);
+                    }
+
+                    container.appendChild(tile);
+                }
+            }
+        }
+
+        function onCreatorCellTapped(r, c) {
+            if (!currentSelectedWordToPaint) return;
+
+            const path = builderPaths[currentSelectedWordToPaint] || [];
+
+            if (path.length > 0) {
+                const [lastR, lastC] = path[path.length - 1];
+                const rowDiff = Math.abs(r - lastR);
+                const colDiff = Math.abs(c - lastC);
+                if (rowDiff > 1 || colDiff > 1) {
+                    showToast("Adjacent spaces only!");
+                    return;
+                }
+            }
+
+            if (path.length >= currentSelectedWordToPaint.length) return;
+
+            path.push([r, c]);
+            builderLetters[r][c] = currentSelectedWordToPaint;
+            builderPaths[currentSelectedWordToPaint] = path;
+
+            if (path.length === currentSelectedWordToPaint.length) {
+                currentSelectedWordToPaint = "";
+                showToast("Word successfully painted!");
+            }
+
+            onWordInputsChanged();
+            renderBuilderGrid();
+        }
+
+        function backtrackPaintPath() {
+            if (!currentSelectedWordToPaint) return;
+            const path = builderPaths[currentSelectedWordToPaint] || [];
+            if (path.length > 0) {
+                const [r, c] = path.pop();
+                builderLetters[r][c] = '';
+                builderPaths[currentSelectedWordToPaint] = path;
+            }
+            onWordInputsChanged();
+            renderBuilderGrid();
+        }
+
+        function validateFullBoardComplete() {
+            const { spangram, themes } = getCreatorWordList();
+            const allWords = [spangram, ...themes].filter(w => w !== "");
+
+            let sum = spangram.length;
+            themes.forEach(w => sum += w.length);
+
+            const allPainted = allWords.every(w => builderPaths[w] && builderPaths[w].length === w.length);
+            const btn = document.getElementById('creator-submit-btn');
+
+            if (sum === 48 && allPainted) {
+                btn.disabled = false;
+                btn.className = "w-full py-2.5 bg-stone-900 hover:bg-stone-800 text-white font-bold rounded-xl text-xs uppercase tracking-wider transition-all shadow-md cursor-pointer";
+                btn.textContent = "🚀 Play This Puzzle Instantly";
+            } else {
+                btn.disabled = true;
+                btn.className = "w-full py-2.5 bg-stone-200 text-stone-400 font-bold rounded-xl text-xs uppercase tracking-wider transition-all cursor-not-allowed";
+                if (sum !== 48) {
+                    btn.textContent = `Letters must equal exactly 48 (Current: ${sum})`;
+                } else {
+                    btn.textContent = "Paint all words onto the board first";
+                }
+            }
+        }
+
+        function clearBuilderGrid() {
+            builderPaths = {};
+            currentSelectedWordToPaint = "";
+            builderLetters = Array(8).fill(null).map(() => Array(6).fill(''));
+            onWordInputsChanged();
+            renderBuilderGrid();
+        }
+
+        function autofillCreatorDemo() {
+            clearBuilderGrid();
+            document.getElementById('create-clue').value = FAIRYTALE_PUZZLE.clue;
+            document.getElementById('create-spangram').value = FAIRYTALE_PUZZLE.spangram;
+            document.getElementById('create-word-0').value = FAIRYTALE_PUZZLE.themeWords[0];
+            document.getElementById('create-word-1').value = FAIRYTALE_PUZZLE.themeWords[1];
+            document.getElementById('create-word-2').value = FAIRYTALE_PUZZLE.themeWords[2];
+            document.getElementById('create-word-3').value = FAIRYTALE_PUZZLE.themeWords[3];
+            document.getElementById('create-word-4').value = FAIRYTALE_PUZZLE.themeWords[4];
+            document.getElementById('create-word-5').value = FAIRYTALE_PUZZLE.themeWords[5];
+            document.getElementById('create-word-6').value = FAIRYTALE_PUZZLE.themeWords[6];
+
+            builderPaths = JSON.parse(JSON.stringify(FAIRYTALE_PUZZLE.wordPaths));
+            onWordInputsChanged();
+            renderBuilderGrid();
+            showToast("Fairytale demo loaded!");
+        }
+
+        function commitCustomPuzzle() {
+            const clue = document.getElementById('create-clue').value.trim() || "A Custom Mystery Clue";
+            const { spangram, themes } = getCreatorWordList();
+
+            const allWords = [spangram, ...themes];
+            const generatedMatrix = Array(8).fill(null).map(() => Array(6).fill(''));
+
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    let foundChar = "";
+                    allWords.forEach(word => {
+                        const idx = (builderPaths[word] || []).findIndex(([pr, pc]) => pr === r && pc === c);
+                        if (idx !== -1) foundChar = word[idx];
+                    });
+                    generatedMatrix[r][c] = foundChar;
+                }
+            }
+
+            PUZZLE_DATA = {
+                clue: clue,
+                spangram: spangram,
+                themeWords: themes,
+                gridMatrix: generatedMatrix,
+                wordPaths: JSON.parse(JSON.stringify(builderPaths))
+            };
+
+            showToast("Custom Puzzle Live!");
+            switchMode('play');
+        }
+
+        function copyShareLink() {
+            const clue = document.getElementById('create-clue').value.trim() || "Custom Strands";
+            const { spangram, themes } = getCreatorWordList();
+
+            let sum = spangram.length;
+            themes.forEach(w => sum += w.length);
+
+            if (sum !== 48) {
+                showToast(`Puzzles must contain exactly 48 letters. (Current: ${sum})`);
+                return;
+            }
+
+            const allWords = [spangram, ...themes];
+            const allPainted = allWords.every(w => builderPaths[w] && builderPaths[w].length === w.length);
+            if (!allPainted) {
+                showToast("Paint all words onto the board before copying share link!");
+                return;
+            }
+
+            const generatedMatrix = Array(8).fill(null).map(() => Array(6).fill(''));
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 6; c++) {
+                    let charFound = "";
+                    allWords.forEach(w => {
+                        const idx = builderPaths[w].findIndex(([pr, pc]) => pr === r && pc === c);
+                        if (idx !== -1) charFound = w[idx];
+                    });
+                    generatedMatrix[r][c] = charFound;
+                }
+            }
+
+            const payload = {
+                clue: clue,
+                spangram: spangram,
+                themeWords: themes,
+                gridMatrix: generatedMatrix,
+                wordPaths: builderPaths
+            };
+
+            try {
+                const b64 = btoa(encodeURIComponent(JSON.stringify(payload)));
+                const shareUrl = `${window.location.origin}${window.location.pathname}?strands=${b64}`;
+
+                if (navigator.clipboard && window.isSecureContext) {
+                    navigator.clipboard.writeText(shareUrl).then(() => {
+                        showToast("Link Copied! Text it to your family!");
+                    });
+                } else {
+                    const temp = document.createElement("input");
+                    temp.value = shareUrl;
+                    document.body.appendChild(temp);
+                    temp.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(temp);
+                    showToast("Link Copied! Text it to your family!");
+                }
+            } catch (err) {
+                showToast("Error generating URL link.");
+            }
+        }
+
+        function checkIncomingURLParameters() {
+            const params = new URLSearchParams(window.location.search);
+            const encoded = params.get("strands");
+            if (encoded) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(atob(encoded)));
+                    if (decoded && decoded.gridMatrix && decoded.wordPaths) {
+                        PUZZLE_DATA = decoded;
+                        showToast("Successfully loaded custom shared Strands!");
+                        // Swap straight to play view if they opened a shared puzzle link!
+                        switchMode('play');
+                    }
+                } catch (e) {
+                    console.error("Invalid shared link payload:", e);
+                }
+            }
+        }
+
+        // Fired whenever you write or delete in the textboxes
+        function showToast(msg) {
+            toastElement.textContent = msg;
+            toastElement.classList.remove('opacity-0');
+            toastElement.classList.add('opacity-100');
+            setTimeout(() => {
+                toastElement.classList.remove('opacity-100');
+                toastElement.classList.add('opacity-0');
+            }, 2500);
+        }
+
+        // Start App Flow control
+        window.onload = function() {
+            checkIncomingURLParameters();
+            
+            // If they didn't load a shared link, start directly in the Artist Studio!
+            const params = new URLSearchParams(window.location.search);
+            if (!params.get("strands")) {
+                switchMode('create');
+            }
+        }
+    </script>
+</body>
+</html>
+
+```
